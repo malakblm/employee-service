@@ -49,3 +49,4 @@ For production, this service is designed to run on HPE GreenLake private cloud:
 - Package the application as a Docker image
 - Deploy to a GreenLake-provisioned VM or container environment
 - Restrict network access to internal traffic only
+![Employee Directory](Home.png)
