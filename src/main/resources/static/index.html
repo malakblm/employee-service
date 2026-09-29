@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Employee Directory</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #171a21;
+    --border: #262a33;
+    --text: #e8e9ec;
+    --muted: #9aa1ad;
+    --accent: #6ea8fe;
+    --danger: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 36px 24px 20px;
+    text-align: center;
+  }
+  header h1 { margin: 0 0 6px; font-size: 1.8rem; }
+  header p { margin: 0; color: var(--muted); }
+
+  #controls {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 0 24px 20px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  #search {
+    flex: 1;
+    min-width: 200px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    font-size: 0.95rem;
+  }
+  button {
+    cursor: pointer;
+    font-size: 0.9rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    background: var(--accent);
+    color: #0f1115;
+    font-weight: 600;
+  }
+  button.secondary {
+    background: transparent;
+    color: var(--text);
+  }
+  button.danger {
+    background: var(--danger);
+    color: #1a0d0d;
+  }
+
+  #grid {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 8px 24px 60px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .card-top { display: flex; gap: 14px; align-items: center; }
+  .avatar {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: var(--accent); color: #0f1115; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .info h3 { margin: 0 0 2px; font-size: 1rem; }
+  .info p { margin: 0; color: var(--muted); font-size: 0.85rem; }
+  .info .title { color: var(--accent); font-size: 0.8rem; margin-top: 4px; }
+  .card-actions { display: flex; gap: 8px; }
+  .card-actions button { padding: 6px 12px; font-size: 0.8rem; }
+
+  #status { text-align: center; color: var(--muted); padding: 20px; }
+
+  #overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  #modal {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    width: 100%;
+    max-width: 380px;
+  }
+  #modal h2 { margin: 0 0 16px; font-size: 1.2rem; }
+  #modal label { display: block; font-size: 0.8rem; color: var(--muted); margin: 10px 0 4px; }
+  #modal input {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #0f1115;
+    color: var(--text);
+    font-size: 0.9rem;
+  }
+  #modal .modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    justify-content: flex-end;
+  }
+  #modal-error {
+    color: var(--danger);
+    font-size: 0.85rem;
+    margin-top: 10px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Employee Directory</h1>
+    <p>Live data from the /employees endpoint</p>
+  </header>
+
+  <div id="controls">
+    <input id="search" type="text" placeholder="Search by name, email, or title...">
+    <button id="addBtn">+ Add Employee</button>
+  </div>
+
+  <div id="status">Loading...</div>
+  <div id="grid"></div>
+
+  <div id="overlay">
+    <div id="modal">
+      <h2 id="modal-title">Add Employee</h2>
+      <input type="hidden" id="form-mode">
+      <label>Employee ID</label>
+      <input id="form-id" type="text">
+      <label>First name</label>
+      <input id="form-first" type="text">
+      <label>Last name</label>
+      <input id="form-last" type="text">
+      <label>Email</label>
+      <input id="form-email" type="email">
+      <label>Title</label>
+      <input id="form-titlefield" type="text">
+      <div id="modal-error"></div>
+      <div class="modal-actions">
+        <button class="secondary" id="cancelBtn">Cancel</button>
+        <button id="saveBtn">Save</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+let allEmployees = [];
+
+async function loadEmployees() {
+  document.getElementById("status").style.display = "block";
+  document.getElementById("status").textContent = "Loading...";
+  try {
+    const res = await fetch("/employees");
+    const data = await res.json();
+    allEmployees = data.Employees || [];
+    renderGrid(allEmployees);
+  } catch (err) {
+    document.getElementById("status").textContent = "Could not load employee data.";
+    console.error(err);
+  }
+}
+
+function renderGrid(list) {
+  const grid = document.getElementById("grid");
+  const status = document.getElementById("status");
+  grid.innerHTML = "";
+  if (list.length === 0) {
+    status.style.display = "block";
+    status.textContent = "No employees found.";
+    return;
+  }
+  status.style.display = "none";
+  list.forEach(emp => {
+    const initials = ((emp.first_name || "")[0] || "") + ((emp.last_name || "")[0] || "");
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="card-top">
+        <div class="avatar">${initials.toUpperCase()}</div>
+        <div class="info">
+          <h3>${emp.first_name} ${emp.last_name}</h3>
+          <p>${emp.email}</p>
+          <div class="title">${emp.title || ""}</div>
+        </div>
+      </div>
+      <div class="card-actions">
+        <button class="secondary edit-btn">Edit</button>
+        <button class="danger delete-btn">Delete</button>
+      </div>
+    `;
+    card.querySelector(".edit-btn").addEventListener("click", () => openEditModal(emp));
+    card.querySelector(".delete-btn").addEventListener("click", () => deleteEmployee(emp.employee_id));
+    grid.appendChild(card);
+  });
+}
+
+document.getElementById("search").addEventListener("input", (e) => {
+  const q = e.target.value.toLowerCase();
+  const filtered = allEmployees.filter(emp =>
+    (emp.first_name || "").toLowerCase().includes(q) ||
+    (emp.last_name || "").toLowerCase().includes(q) ||
+    (emp.email || "").toLowerCase().includes(q) ||
+    (emp.title || "").toLowerCase().includes(q)
+  );
+  renderGrid(filtered);
+});
+
+function openAddModal() {
+  document.getElementById("modal-title").textContent = "Add Employee";
+  document.getElementById("form-mode").value = "add";
+  document.getElementById("form-id").value = "";
+  document.getElementById("form-id").disabled = false;
+  document.getElementById("form-first").value = "";
+  document.getElementById("form-last").value = "";
+  document.getElementById("form-email").value = "";
+  document.getElementById("form-titlefield").value = "";
+  document.getElementById("modal-error").style.display = "none";
+  document.getElementById("overlay").style.display = "flex";
+}
+
+function openEditModal(emp) {
+  document.getElementById("modal-title").textContent = "Edit Employee";
+  document.getElementById("form-mode").value = "edit";
+  document.getElementById("form-id").value = emp.employee_id;
+  document.getElementById("form-id").disabled = true;
+  document.getElementById("form-first").value = emp.first_name;
+  document.getElementById("form-last").value = emp.last_name;
+  document.getElementById("form-email").value = emp.email;
+  document.getElementById("form-titlefield").value = emp.title || "";
+  document.getElementById("modal-error").style.display = "none";
+  document.getElementById("overlay").style.display = "flex";
+}
+
+function closeModal() {
+  document.getElementById("overlay").style.display = "none";
+}
+
+document.getElementById("addBtn").addEventListener("click", openAddModal);
+document.getElementById("cancelBtn").addEventListener("click", closeModal);
+
+document.getElementById("saveBtn").addEventListener("click", async () => {
+  const mode = document.getElementById("form-mode").value;
+  const payload = {
+    employee_id: document.getElementById("form-id").value.trim(),
+    first_name: document.getElementById("form-first").value.trim(),
+    last_name: document.getElementById("form-last").value.trim(),
+    email: document.getElementById("form-email").value.trim(),
+    title: document.getElementById("form-titlefield").value.trim()
+  };
+
+  const errorBox = document.getElementById("modal-error");
+  errorBox.style.display = "none";
+
+  try {
+    let res;
+    if (mode === "add") {
+      res = await fetch("/employees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      res = await fetch("/employees/" + encodeURIComponent(payload.employee_id), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+    }
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || ("Request failed with status " + res.status));
+    }
+
+    closeModal();
+    loadEmployees();
+  } catch (err) {
+    errorBox.textContent = err.message;
+    errorBox.style.display = "block";
+  }
+});
+
+async function deleteEmployee(id) {
+  if (!confirm("Delete this employee?")) return;
+  try {
+    const res = await fetch("/employees/" + encodeURIComponent(id), { method: "DELETE" });
+    if (!res.ok && res.status !== 204) {
+      throw new Error("Delete failed with status " + res.status);
+    }
+    loadEmployees();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+loadEmployees();
+</script>
+</body>
+</html>
